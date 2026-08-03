@@ -211,7 +211,10 @@ cargo test
 
 ## AI usage
 
-Parts of this project were built with AI assistance (Claude Code). Roughly:
+Parts of this project were built with AI assistance (Claude Code). The (almost) 
+full transcript can be found at `transcripts`.
+
+Roughly:
 
 - **Unit test generation.** Given an existing function or struct, prompts
   like *"Write unit tests for `FUNCTION`|`STRUCT` in `FILE`"* were used to

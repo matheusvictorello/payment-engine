@@ -1,0 +1,441 @@
+❯ Write a README for this project. Its a payment engine, bundled into a cli,    
+  but it was desinged taking into consideration the scaling of the system. Its  
+  composed of two layers, the first one handles updates to transactions, the    
+  second one updates to a client account. It was thought like so that the first 
+  layer can be sharded by tx_id, and the second one by client_id, so that the   
+  state of transaction and accounts can be held by one host, an it can live in  
+  RAM, allowing the system to moximize the number of transactions per second.   
+
+● I'll check the project structure and key files to make sure the README
+  accurately reflects the code (CLI usage, CSV formats, module layout).
+
+● Good, I have enough to write an accurate README. Let me check for a license/CI
+  file quickly, then write it.
+
+● Now I have a clear picture. Let me write the README.
+
+● Write(README.md)
+  ⎿  Wrote 133 lines to README.md
+       1 # payment-engine
+       3 A CLI payment engine that replays a stream of client transaction
+         s (deposits,
+         ulting
+       5 per-client account balances.
+       7 It's built as a single binary today, but the internal architectu
+         re is
+          can scale
+       9 out from "one process" to "one host per shard" without changing 
+      10 processing logic.
+     … +172 lines (ctrl+o to expand)
+
+  Read 1 file (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Added 4 lines, removed 1 line
+      38  ```csv
+      39  client,available,held,total,locked
+      40  1,1.5,0,1.5,false
+      41 -2,-1.0,0,-1.0,false                                            
+      41 +2,2.0,0,2.0,false                                              
+      42  ```
+      43  
+      44 +(client 2's withdrawal of 3.0 is rejected — insufficient availa
+         +ble funds — so                                                 
+      45 +its balance is unaffected.)                                    
+      46 +                                                               
+      47  `gen.py` generates larger synthetic input files (`1k_transactio
+          ns.csv`,
+      48  `1m_transactions.csv`, `10m_transactions.csv` are checked in as
+           fixtures) for
+      49  sizing and throughput testing.
+
+● Created README.md covering usage, CSV I/O format, and the two-layer sharded
+  architecture (transaction layer keyed by tx_id, account layer keyed by
+  client_id, in-RAM state per shard, RouterSink as the shared fan-out primitive,
+  and how the design maps to future multi-host scaling). Verified the CSV
+  columns, account semantics, and example output against the actual code and
+  transactions.csv fixture rather than guessing.
+
+✻ Baked for 1m 8s
+
+※ recap: Building a payment-engine CLI in Rust, most recently writing its README. README is done and accurate; next step is to review it together or continue polishing docs/code as you see fit. (disable recaps in /config)
+
+❯ I moved the RouterSink to core::business, refactor @README.md                 
+  ⎿  Read README.md (133 lines)
+
+● Confirmed — RouterSink now lives at src/core/business/router_sink.rs, and
+  src/inbound no longer has a business module for it. Updating both mentions and
+  the project layout diagram.
+
+● Update(README.md)
+  ⎿  Added 1 line, removed 1 line
+      93  - `n_consumers` (defaults to `available_parallelism() / 2`) tra
+          nsaction-layer
+      94    shards and the same number of account-layer shards are spawne
+          d as Tokio
+      95    tasks, each owning its own `HashMap`.
+      96 -- `RouterSink` (`inbound::business::router_sink`) is a `futures
+         -::Sink`                                                        
+      96 +- `RouterSink` (`core::business::router_sink`) is a `futures::S
+         +ink`                                                           
+      97    combinator that fans a single stream out to per-shard channel
+          s using a
+      98    selector closure, `tx_id % n_consumers` for the transaction l
+          ayer,
+      99    `client_id % n_consumers` for the account layer, so it's the 
+          same
+
+● Update(README.md)
+  ⎿  Added 2 lines, removed 3 lines
+      117  src/
+      118    core/          domain model + business logic (transport-agno
+           stic)
+      119      model/       ClientTxEvent, ClientTxStateEvent, Account, A
+           mount, ...
+      120 -    business/    per-layer stream processors, in-memory stores
+      121 -  inbound/       CSV (de)serialization and the RouterSink fan-
+          -out sink                                                      
+      120 +    business/    per-layer stream processors, in-memory stores
+          +, RouterSink                                                  
+      121 +  inbound/       CSV (de)serialization                        
+      122      model/       CSV row <-> domain model conversions
+      123 -    business/    RouterSink                                   
+      123    main.rs        CLI wiring: reads CSV, spins up shards, write
+           s CSV
+      124  ```
+      125  
+
+  Read 1 file (ctrl+o to expand)
+
+● Reads consistently — since RouterSink is transport-generic (K: Sink<I>), its
+  being part of core::business alongside the stream processors now correctly
+  reflects that it's core, transport-agnostic infrastructure rather than an
+  inbound/CSV-specific detail. Both mentions and the layout diagram are updated;
+  no other part of the README referenced the old path.
+
+✻ Brewed for 21s
+
+❯ Add a new README session about AI usage, mension the use cases:               
+  - Unit test generation, with pronpts in the liking "Write unit tests for      
+  FUNCTION|STRUCT in FILE"                                                      
+  - Code snipet generation for clap setup, csv reader and writer, stream        
+  consumption, with prompts in the likes of "Write a sample cli using clap" or  
+  "Write a sample csv reader/writer using csv"                                  
+  - The RouterSink implementation given instructions: not much thought into it, 
+  the important part is how to decide if it is ready for receiving an Item, we  
+  simply check every downstream sink readyness, the implementation is trivial   
+  from that, AI made it from skeleton snipet and prompt "Implement RouterSink   
+  at FILE, Ensure all sinks are ready at poll_ready".                           
+  - Generating this README from topic, src and csv samples.                     
+  Read 1 file (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Added 28 lines
+      129  cargo build --release
+      130  cargo test
+      131  ```
+      132 +                                                              
+      133 +## AI usage                                                   
+      134 +                                                              
+      135 +Parts of this project were built with AI assistance (Claude Co
+          +de). Roughly:                                                 
+      136 +                                                              
+      137 +- **Unit test generation.** Given an existing function or stru
+          +ct, prompts                                                   
+      138 +  like *"Write unit tests for `FUNCTION`|`STRUCT` in `FILE`"* 
+          +were used to                                                  
+      139 +  generate the bulk of the test modules (e.g. `Account::apply`
+          +,                                                             
+      140 +  `CsvClientTxRecord::try_from`).                             
+      141 +- **Boilerplate/snippet generation.** Standard library-adjacen
+          +t wiring —                                                    
+      142 +  `clap` argument parsing, `csv` reader/writer setup, stream c
+          +onsumption via                                                
+      143 +  `futures`/`tokio-stream` — was scaffolded from generic promp
+          +ts like *"Write                                               
+      144 +  a sample CLI using clap"* or *"Write a sample CSV reader/wri
+          +ter using                                                     
+      145 +  csv"*, then adapted to this project's types.                
+      146 +- **`RouterSink`.** This one didn't get much design thought be
+          +yond the core                                                 
+      147 +  idea: a sink is only ready to accept an item once every down
+          +stream sink it                                                
+      148 +  could route to is ready, everything else follows from that. 
+          +It was                                                        
+      149 +  generated from a skeleton snippet plus the prompt *"Implemen
+          +t RouterSink                                                  
+      150 +  at `FILE`. Ensure all sinks are ready at `poll_ready`."*, in
+      151 +  `core/business/router_sink.rs`.                             
+      152 +- **This README** was generated from a short description of th
+          +e project's                                                   
+      153 +  topic, together with the `src` tree and the sample transacti
+          +on CSVs, then                                                 
+      154 +  reviewed and corrected against the actual code and fixture d
+          +ata.                                                          
+      155 +                                                              
+      156 +AI-generated code and docs were reviewed and, where needed, co
+          +rrected rather                                                
+      157 +than taken as-is — in particular, `RouterSink` failed to compi
+          +le as                                                         
+      158 +generated (missing `Unpin` bound on the selector closure) and 
+          +was fixed                                                     
+      159 +before being kept.                                            
+
+● Added an AI usage section covering the four use cases, and noted the one
+  concrete correction that came out of this session (the missing Unpin bound) as
+  evidence review actually happened rather than a blanket disclaimer.
+
+✻ Churned for 13s
+
+❯ Include the generation of Amount type and its serialization in the AI session 
+  of README.                                                                    
+
+  Read 1 file (ctrl+o to expand)
+
+● Confirms Amount is a fixed-point u64 (4 decimal places, scaled by 10,000) with
+  a hand-rolled string-based Serialize/Deserialize (via AmountVisitor) that
+  rejects negatives, extra decimal digits, etc. Adding this to the AI usage
+  section.
+
+● Update(README.md)
+  ⎿  Added 8 lines
+      143    `futures`/`tokio-stream` — was scaffolded from generic promp
+           ts like *"Write
+      144    a sample CLI using clap"* or *"Write a sample CSV reader/wri
+           ter using
+      145    csv"*, then adapted to this project's types.
+      146 +- **`Amount` type and its (de)serialization.** The fixed-point
+          + `Amount(u64)`                                                
+      147 +  type (4 decimal places, no negatives) and its custom `Serial
+          +ize`/                                                         
+      148 +  `Deserialize` impls (`inbound/model/amount.rs`, `amount_visi
+          +tor.rs`) — used                                               
+      149 +  instead of a float to avoid rounding drift across millions o
+          +f transactions                                                
+      150 +  — were AI-generated from a prompt describing the desired rep
+          +resentation                                                   
+      151 +  and CSV round-trip behavior, along with the accompanying edg
+          +e-case tests                                                  
+      152 +  (leading zeros, trailing zero-padding, too many/few decimal 
+          +places,                                                       
+      153 +  negative and malformed input).                              
+      154  - **`RouterSink`.** This one didn't get much design thought be
+           yond the core
+      155    idea: a sink is only ready to accept an item once every down
+           stream sink it
+      156    could route to is ready, everything else follows from that. 
+           It was
+
+● Added the Amount type and its custom string-based serialization as another
+  AI-generated use case in the README's AI usage section, described accurately
+  against the actual implementation (fixed-point u64, 4 decimals, custom serde
+  impls, and the edge-case tests that came with it).
+
+✻ Cooked for 12s
+
+❯ Add a section about the design decision of Amount, storing 'cent' as u64.     
+
+● Update(README.md)
+  ⎿  Added 26 lines
+      123    main.rs        CLI wiring: reads CSV, spins up shards, write
+           s CSV
+      124  ```
+      125  
+      126 +## Design decisions                                           
+      127 +                                                              
+      128 +### `Amount`: fixed-point integer instead of float            
+      129 +                                                              
+      130 +`Amount` wraps a `u64` rather than an `f32`/`f64`. The wrapped
+          + integer counts                                               
+      131 +the smallest unit the CSV format supports — ten-thousandths (4
+          + decimal                                                      
+      132 +places), the same idea as storing money as cents, just at fine
+          +r-than-cent                                                   
+      133 +precision to match the input/output format's `x.xxxx` amounts.
+          + `Add`,                                                       
+      134 +`AddAssign` and `SubAssign` are then plain integer arithmetic,
+          + so summing                                                   
+      135 +millions of deposits/withdrawals can't accumulate the rounding
+          + error a                                                      
+      136 +binary float would introduce, and equality/ordering (used thro
+          +ughout                                                        
+      137 +`Account::apply` to check sufficient funds) stay exact.       
+      138 +                                                              
+      139 +`u64` instead of a signed integer is a deliberate constraint, 
+          +not an                                                        
+      140 +oversight: account balances in this domain are never meant to 
+          +go negative                                                   
+      141 +(`Account::apply` rejects a withdrawal/dispute/chargeback that
+          + would exceed                                                 
+      142 +`available`/`held`), so the type itself rules out a whole clas
+          +s of bugs                                                     
+      143 +where an unchecked balance drifts below zero — that would need
+          + to surface as                                                
+      144 +a subtraction overflow/panic rather than silently produce a ne
+          +gative                                                        
+      145 +balance.                                                      
+      146 +                                                              
+      147 +The tradeoff is that (de)serialization can't just be `#[derive
+          +]`'d — parsing                                                
+      148 +and formatting the `x.xxxx` string representation into/out of 
+          +a scaled `u64`                                                
+      149 +is hand-written (`inbound/model/amount.rs`, `amount_visitor.rs
+          +`), including                                                 
+      150 +rejecting negative input at the parse boundary.               
+      151 +                                                              
+      152  ## Building & testing
+      153  
+      154  ```sh
+
+● Added a Design decisions section explaining Amount's fixed-point-integer
+  choice. One correction worth flagging: the code scales by 10,000 (4 decimal
+  places), not 100 (cents) — I described it as "the same idea as storing money
+  as cents, just at finer precision" rather than literally calling it cents, so
+  the README stays accurate to the actual amount.rs implementation.
+
+✻ Churned for 20s
+
+❯ Write a session about the correctness of the implementation, tx event is      
+  validated by the State machine impl by TxState. Changes to an Account are     
+  validated by the Account it self, assumption were made about the types if     
+  transactions, disputes only apply to Deposits, resolve anc chargeback only    
+  apply over a dispute obviously, but a resolve lets the original deposit       
+  unable to be disputed again.                                                  
+
+  Read 2 files (ctrl+o to expand)
+
+● Update(README.md)
+  ⎿  Added 52 lines
+      149  is hand-written (`inbound/model/amount.rs`, `amount_visitor.rs
+           `), including
+      150  rejecting negative input at the parse boundary.
+      151  
+      152 +### Correctness: two independent validation layers            
+      153 +                                                              
+      154 +Each of the two layers described in [Architecture](#architectu
+          +re) validates                                                 
+      155 +its own slice of the domain, and neither trusts the other to h
+          +ave done it                                                   
+      156 +right:                                                        
+      157 +                                                              
+      158 +- **`TxState` validates that a transaction event is a legal tr
+          +ansition for                                                  
+      159 +  that transaction**, independent of any account balance. It's
+          + an explicit                                                  
+      160 +  state machine (`core/model/tx_state.rs`) keyed by `(client_i
+          +d, tx_id)`:                                                   
+      161 +                                                              
+      162 +  ```                                                         
+      163 +  Uninitialized ─▶ Deposit ─▶ Dispute ─┬─▶ Resolve   (terminal
+          +)                                                             
+      164 +                                       └─▶ Chargeback (termina
+          +l)                                                            
+      165 +  Uninitialized ─▶ Withdrawal          (terminal)             
+      166 +  ```                                                         
+      167 +                                                              
+      168 +  `TxState::apply` is a total match over `(state, event)`; any
+          +thing not                                                     
+      169 +  listed above is an `Err` that leaves the state untouched. Th
+          +is is where                                                   
+      170 +  the assumptions about transaction types that aren't spelled 
+          +out by the                                                    
+      171 +  input format get encoded as data, rather than scattered `if`
+          +s:                                                            
+      172 +  - **Only a `Deposit` can be disputed.** There's no `(Withdra
+          +wal,                                                          
+      173 +    Dispute)` arm — a `dispute` against a withdrawal is reject
+          +ed, since a                                                   
+      174 +    withdrawal has already left the account and there's no hel
+          +d amount to                                                   
+      175 +    reference.                                                
+      176 +  - **`resolve`/`chargeback` only make sense against a `Disput
+          +e`** — both                                                   
+      177 +    are only reachable from the `Dispute` state, so referencin
+          +g a `tx` that                                                 
+      178 +    was never disputed (or already resolved/charged back) is r
+          +ejected.                                                      
+      179 +  - **`Resolve` is terminal.** Once a disputed deposit is reso
+          +lved it moves                                                 
+      180 +    to `TxState::Resolve`, not back to `TxState::Deposit` — so
+          + the same                                                     
+      181 +    transaction can't be disputed a second time. (`Chargeback`
+          + is likewise                                                  
+      182 +    terminal, and additionally locks the account — see below.)
+      183 +                                                              
+      184 +- **`Account::apply` validates that a state transition is actu
+          +ally                                                          
+      185 +  affordable**, independent of transaction history. Given a   
+      186 +  `TxStateEvent` that `TxState` has already deemed a legal tra
+          +nsition, it                                                   
+      187 +  still checks the account has enough `available`/`held` funds
+          + to cover it,                                                 
+      188 +  and rejects everything once `locked` is set. This is what st
+          +ops, e.g., a                                                  
+      189 +  withdrawal for more than the current balance, even though no
+          +thing about                                                   
+      190 +  that withdrawal is illegal from `TxState`'s point of view.  
+      191 +                                                              
+      192 +Splitting validation this way keeps each check local to the st
+          +ate it needs:                                                 
+      193 +`TxState` never looks at balances, `Account` never looks at tr
+          +ansaction                                                     
+      194 +history. That locality is also what makes the sharding in     
+      195 +[Architecture](#architecture) sound — `TxState` only needs the
+          + shard keyed by                                               
+      196 +`tx_id`, `Account` only needs the shard keyed by `client_id`, 
+          +so neither                                                    
+      197 +check requires reaching across shards.                        
+      198 +                                                              
+      199 +Rejections from either layer aren't treated as fatal errors: t
+          +hey're logged                                                 
+      200 +to stderr and dropped (see `process_client_tx_event_stream`,  
+      201 +`process_client_tx_event.rs`), so one malformed or inapplicabl
+          +e event in the                                                
+      202 +input doesn't abort the run.                                  
+      203 +                                                              
+      204  ## Building & testing
+      205  
+      206  ```sh
+
+● Let me verify the account layer also drops rejections the same way, to make
+  sure that closing claim covers both layers accurately.
+
+  Read 1 file (ctrl+o to expand)
+
+● Confirmed both layers do the same log-and-drop, so the closing claim holds.
+  Let me tighten that last sentence to cite both functions accurately.
+
+● Update(README.md)
+  ⎿  Added 5 lines, removed 4 lines
+      196  `tx_id`, `Account` only needs the shard keyed by `client_id`, 
+           so neither
+      197  check requires reaching across shards.
+      198  
+      199 -Rejections from either layer aren't treated as fatal errors: t
+          -hey're logged                                                 
+      200 -to stderr and dropped (see `process_client_tx_event_stream`,  
+      201 -`process_client_tx_event.rs`), so one malformed or inapplicabl
+          -e event in the                                                
+      202 -input doesn't abort the run.                                  
+      199 +Rejections from either layer aren't treated as fatal errors: b
+          +oth                                                           
+      200 +`process_client_tx_event_stream` (`TxState` rejections) and   
+      201 +`process_client_tx_state_event_stream` (`Account` rejections) 
+          +log the                                                       
+      202 +dropped event to stderr and move on, so one malformed or inapp
+          +licable event                                                 
+      203 +in the input doesn't abort the run.                           
+      204  
+      205  ## Building & testing
+      206  
+
+● Added a Correctness: two independent validation layers section documenting the
+  TxState state machine and Account::apply, verified directly against
+  tx_state.rs, process_client_tx_event.rs, and process_client_tx_state_event.rs:
+  dispute only reachable from Deposit, resolve/chargeback only from Dispute,
+  Resolve being terminal (so a resolved deposit can't be disputed again), and
+  that both layers drop/log rejections rather than aborting the run.
+
+✻ Churned for 45s
+
+※ recap: Building out the payment-engine README (usage, architecture, design decisions, correctness, AI usage). Just finished the correctness section on TxState and Account validation; next step is to review the full README for consistency or add any further sections you'd like.
